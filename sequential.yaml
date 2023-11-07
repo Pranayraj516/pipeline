@@ -1,0 +1,83 @@
+# PIPELINE DEFINITION
+# Name: sequential-pipeline
+# Description: A pipeline with two sequential steps.
+# Inputs:
+#    url: str [Default: 'gs://ml-pipeline/sample-data/shakespeare/shakespeare1.txt']
+components:
+  comp-echo-op:
+    executorLabel: exec-echo-op
+    inputDefinitions:
+      parameters:
+        text:
+          parameterType: STRING
+  comp-gcs-download-op:
+    executorLabel: exec-gcs-download-op
+    inputDefinitions:
+      parameters:
+        url:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        output:
+          parameterType: STRING
+deploymentSpec:
+  executors:
+    exec-echo-op:
+      container:
+        args:
+        - echo "$0"
+        - '{{$.inputs.parameters[''text'']}}'
+        command:
+        - sh
+        - -c
+        image: library/bash:4.4.23
+    exec-gcs-download-op:
+      container:
+        args:
+        - gsutil cat $0 | tee $1
+        - '{{$.inputs.parameters[''url'']}}'
+        - '{{$.outputs.parameters[''output''].output_file}}'
+        command:
+        - sh
+        - -c
+        image: google/cloud-sdk:279.0.0
+pipelineInfo:
+  description: A pipeline with two sequential steps.
+  name: sequential-pipeline
+root:
+  dag:
+    tasks:
+      echo-op:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-echo-op
+        dependentTasks:
+        - gcs-download-op
+        inputs:
+          parameters:
+            text:
+              taskOutputParameter:
+                outputParameterKey: output
+                producerTask: gcs-download-op
+        taskInfo:
+          name: echo-op
+      gcs-download-op:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-gcs-download-op
+        inputs:
+          parameters:
+            url:
+              componentInputParameter: url
+        taskInfo:
+          name: gcs-download-op
+  inputDefinitions:
+    parameters:
+      url:
+        defaultValue: gs://ml-pipeline/sample-data/shakespeare/shakespeare1.txt
+        isOptional: true
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.0.1
